@@ -13,12 +13,18 @@
 #include <stdint.h>
 #include "c_blake256.h"
 
-#define U8TO32(p) \
-	(((uint32_t)((p)[0]) << 24) | ((uint32_t)((p)[1]) << 16) |    \
-	 ((uint32_t)((p)[2]) <<  8) | ((uint32_t)((p)[3])      ))
-#define U32TO8(p, v) \
-	(p)[0] = (uint8_t)((v) >> 24); (p)[1] = (uint8_t)((v) >> 16); \
-	(p)[2] = (uint8_t)((v) >>  8); (p)[3] = (uint8_t)((v)      );
+static inline uint32_t U8TO32(const uint8_t *p)
+{
+    uint32_t ret = *(const uint32_t*)p;
+    __asm__ volatile ("bswap %0" : "+r"(ret));
+    return ret;
+}
+
+static inline void U32TO8(uint8_t *p, uint32_t v)
+{
+    __asm__ volatile ("bswap %0" : "+r"(v));
+    *(uint32_t *)p = v;
+}
 
 const uint8_t sigma[][16] = {
 	{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15},
