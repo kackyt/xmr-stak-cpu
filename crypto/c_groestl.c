@@ -7,6 +7,7 @@
  *          
  *
  */
+#include <x86intrin.h>
 
 #include "c_groestl.h"
 #include "groestl_tables.h"
@@ -89,22 +90,41 @@ static void RND512P(uint8_t *x, uint32_t *y, uint32_t r) {
 static void RND512Q(uint8_t *x, uint32_t *y, uint32_t r) {
   uint32_t temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp;
   uint32_t* x32 = (uint32_t*)x;
-  x32[ 0] = ~x32[ 0];
-  x32[ 1] ^= 0xffffffff^r;
-  x32[ 2] = ~x32[ 2];
-  x32[ 3] ^= 0xefffffff^r;
-  x32[ 4] = ~x32[ 4];
-  x32[ 5] ^= 0xdfffffff^r;
-  x32[ 6] = ~x32[ 6];
-  x32[ 7] ^= 0xcfffffff^r;
-  x32[ 8] = ~x32[ 8];
-  x32[ 9] ^= 0xbfffffff^r;
-  x32[10] = ~x32[10];
-  x32[11] ^= 0xafffffff^r;
-  x32[12] = ~x32[12];
-  x32[13] ^= 0x9fffffff^r;
-  x32[14] = ~x32[14];
-  x32[15] ^= 0x8fffffff^r;
+  uint32_t __attribute__ ((aligned(16))) c[16] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xefffffff,
+                     0xffffffff, 0xdfffffff, 0xffffffff, 0xcfffffff,
+                     0xffffffff, 0xbfffffff, 0xffffffff, 0xafffffff,
+                     0xffffffff, 0x9fffffff, 0xffffffff, 0x8fffffff};
+  c[1] ^= r;
+  c[3] ^= r;
+  c[5] ^= r;
+  c[7] ^= r;
+  c[9] ^= r;
+  c[11] ^= r;
+  c[13] ^= r;
+  c[15] ^= r;
+
+  __m128i a, b;
+
+  a = _mm_load_si128((__m128i*)&c[0]);
+  b = _mm_load_si128((__m128i*)&x32[0]);
+  b = _mm_xor_si128(a, b);
+  _mm_store_si128((__m128i*)&x32[0], b);
+
+  a = _mm_load_si128((__m128i*)&c[4]);
+  b = _mm_load_si128((__m128i*)&x32[4]);
+  b = _mm_xor_si128(a, b);
+  _mm_store_si128((__m128i*)&x32[4], b);
+
+  a = _mm_load_si128((__m128i*)&c[8]);
+  b = _mm_load_si128((__m128i*)&x32[8]);
+  b = _mm_xor_si128(a, b);
+  _mm_store_si128((__m128i*)&x32[8], b);
+
+  a = _mm_load_si128((__m128i*)&c[12]);
+  b = _mm_load_si128((__m128i*)&x32[12]);
+  b = _mm_xor_si128(a, b);
+  _mm_store_si128((__m128i*)&x32[12], b);
+
   COLUMN(x,y, 0,  2,  6, 10, 14,  1,  5,  9, 13, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
   COLUMN(x,y, 2,  4,  8, 12,  0,  3,  7, 11, 15, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
   COLUMN(x,y, 4,  6, 10, 14,  2,  5,  9, 13,  1, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
