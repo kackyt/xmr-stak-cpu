@@ -21,15 +21,35 @@
 
 #ifdef __GNUC__
 #include <x86intrin.h>
-static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi)
+static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t *hi)
 {
-	unsigned __int128 r = (unsigned __int128)a * (unsigned __int128)b;
-	*hi = r >> 64;
-	return (uint64_t)r;
+  unsigned __int128 r = (unsigned __int128)a * (unsigned __int128)b;
+  *hi = r >> 64;
+  return (uint64_t)r;
 }
+
+static inline __m128i _umul128g(uint64_t a, uint64_t b)
+{
+  unsigned __int128 m = (unsigned __int128)a * (unsigned __int128)b;
+  m = (m >> 64) | ((m & 0xFFFFFFFFFFFFFFFF) << 64);
+  __m128i r = _mm_load_si128((__m128i*)&m);
+  return r;
+}
+
 #define _mm256_set_m128i(v0, v1)  _mm256_insertf128_si256(_mm256_castsi128_si256(v1), (v0), 1)
 #else
 #include <intrin.h>
+
+static inline __m128i _umul128g(uint64_t a, uint64_t b)
+{
+  uint64_t tmp[2];
+  tmp[1] = _umul128(a, b, &tmp[0]);
+
+  __m128i r = _mm_load_si128((__m128i*)&tmp);
+  return r;
+}
+
+
 #endif // __GNUC__
 
 #if !defined(_LP64) && !defined(_WIN64)
@@ -368,11 +388,9 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 	uint8_t* l1 = ctx1->long_state;
 	uint64_t* h1 = (uint64_t*)ctx1->hash_state;
 
-	uint64_t axl0 = h0[0] ^ h0[4];
-	uint64_t axh0 = h0[1] ^ h0[5];
+    __m128i ax0 = _mm_set_epi64x(h0[1] ^ h0[5], h0[0] ^ h0[4]);
 	__m128i bx0 = _mm_set_epi64x(h0[3] ^ h0[7], h0[2] ^ h0[6]);
-	uint64_t axl1 = h1[0] ^ h1[4];
-	uint64_t axh1 = h1[1] ^ h1[5];
+    __m128i ax1 = _mm_set_epi64x(h1[1] ^ h1[5], h1[0] ^ h1[4]);
 	__m128i bx1 = _mm_set_epi64x(h1[3] ^ h1[7], h1[2] ^ h1[6]);
 
 	uint64_t idx0 = h0[0] ^ h0[4];
@@ -382,12 +400,13 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 	for (size_t i = 0; i < ITERATIONS; i++)
 	{
 		__m128i cx;
+        __m128i tmpx, tmpy;
 		cx = _mm_load_si128((__m128i *)&l0[idx0 & 0x1FFFF0]);
 
 		if(SOFT_AES)
-			cx = soft_aesenc(cx, _mm_set_epi64x(axh0, axl0));
+			cx = soft_aesenc(cx, ax0);
 		else
-			cx = _mm_aesenc_si128(cx, _mm_set_epi64x(axh0, axl0));
+			cx = _mm_aesenc_si128(cx, ax0);
 
 		_mm_store_si128((__m128i *)&l0[idx0 & 0x1FFFF0], _mm_xor_si128(bx0, cx));
 		idx0 = _mm_cvtsi128_si64(cx);
@@ -399,46 +418,34 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 		cx = _mm_load_si128((__m128i *)&l1[idx1 & 0x1FFFF0]);
 
 		if(SOFT_AES)
-			cx = soft_aesenc(cx, _mm_set_epi64x(axh1, axl1));
+			cx = soft_aesenc(cx, ax1);
 		else
-			cx = _mm_aesenc_si128(cx, _mm_set_epi64x(axh1, axl1));
+			cx = _mm_aesenc_si128(cx, ax1);
 
 		_mm_store_si128((__m128i *)&l1[idx1 & 0x1FFFF0], _mm_xor_si128(bx1, cx));
 		idx1 = _mm_cvtsi128_si64(cx);
-		bx1 = cx;
-
 		if(PREFETCH)
 			_mm_prefetch((const char*)&l1[idx1 & 0x1FFFF0], _MM_HINT_T0);
+		bx1 = cx;
 
-		uint64_t hi, lo, cl, ch;
-		cl = ((uint64_t*)&l0[idx0 & 0x1FFFF0])[0];
-		ch = ((uint64_t*)&l0[idx0 & 0x1FFFF0])[1];
+        tmpx = _mm_load_si128((__m128i*)&l0[idx0 & 0x1FFFF0]);
+        tmpy = _umul128g(idx0, (uint64_t)tmpx[0]);
+        ax0 =  _mm_add_epi64(ax0, tmpy);
+        _mm_store_si128((__m128i*)&l0[idx0 & 0x1FFFF0], ax0);
 
-		lo = _umul128(idx0, cl, &hi);
-
-		axl0 += hi;
-		axh0 += lo;
-		((uint64_t*)&l0[idx0 & 0x1FFFF0])[0] = axl0;
-		((uint64_t*)&l0[idx0 & 0x1FFFF0])[1] = axh0;
-		axh0 ^= ch;
-		axl0 ^= cl;
-		idx0 = axl0;
+        ax0 = _mm_xor_si128(ax0, tmpx);
+        idx0 = _mm_cvtsi128_si64(ax0);
 
 		if(PREFETCH)
 			_mm_prefetch((const char*)&l0[idx0 & 0x1FFFF0], _MM_HINT_T0);
 
-		cl = ((uint64_t*)&l1[idx1 & 0x1FFFF0])[0];
-		ch = ((uint64_t*)&l1[idx1 & 0x1FFFF0])[1];
+        tmpx = _mm_load_si128((__m128i*)&l1[idx1 & 0x1FFFF0]);
+        tmpy = _umul128g(idx1, tmpx[0]);
+        ax1 =  _mm_add_epi64(ax1, tmpy);
+        _mm_store_si128((__m128i*)&l1[idx1 & 0x1FFFF0], ax1);
 
-		lo = _umul128(idx1, cl, &hi);
-
-		axl1 += hi;
-		axh1 += lo;
-		((uint64_t*)&l1[idx1 & 0x1FFFF0])[0] = axl1;
-		((uint64_t*)&l1[idx1 & 0x1FFFF0])[1] = axh1;
-		axh1 ^= ch;
-		axl1 ^= cl;
-		idx1 = axl1;
+        ax1 = _mm_xor_si128(ax1, tmpx);
+        idx1 = _mm_cvtsi128_si64(ax1);
 
 		if(PREFETCH)
 			_mm_prefetch((const char*)&l1[idx1 & 0x1FFFF0], _MM_HINT_T0);

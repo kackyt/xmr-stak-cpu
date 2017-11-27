@@ -67,14 +67,23 @@ const uint8_t indices_cyclic[15] = {0,1,2,3,4,5,6,7,0,1,2,3,4,5,6};
 static void RND512P(uint8_t *x, uint32_t *y, uint32_t r) {
   uint32_t temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp;
   uint32_t* x32 = (uint32_t*)x;
-  x32[ 0] ^= 0x00000000^r;
-  x32[ 2] ^= 0x00000010^r;
-  x32[ 4] ^= 0x00000020^r;
-  x32[ 6] ^= 0x00000030^r;
-  x32[ 8] ^= 0x00000040^r;
-  x32[10] ^= 0x00000050^r;
-  x32[12] ^= 0x00000060^r;
-  x32[14] ^= 0x00000070^r;
+  uint32_t c[16] = { 0x00, 0x00, 0x10, 0x00,
+                     0x20, 0x00, 0x30, 0x00,
+                     0x40, 0x00, 0x50, 0x00,
+                     0x60, 0x00, 0x70, 0x00};
+  c[0] ^= r;
+  c[2] ^= r;
+  c[4] ^= r;
+  c[6] ^= r;
+  c[8] ^= r;
+  c[10] ^= r;
+  c[12] ^= r;
+  c[14] ^= r;
+
+  for (int i = 0; i < 16 ; i++) {
+      x32[i] ^= c[i];
+  }
+
   COLUMN(x,y, 0,  0,  2,  4,  6,  9, 11, 13, 15, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
   COLUMN(x,y, 2,  2,  4,  6,  8, 11, 13, 15,  1, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
   COLUMN(x,y, 4,  4,  6,  8, 10, 13, 15,  1,  3, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
@@ -89,22 +98,22 @@ static void RND512P(uint8_t *x, uint32_t *y, uint32_t r) {
 static void RND512Q(uint8_t *x, uint32_t *y, uint32_t r) {
   uint32_t temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp;
   uint32_t* x32 = (uint32_t*)x;
-  x32[ 0] = ~x32[ 0];
-  x32[ 1] ^= 0xffffffff^r;
-  x32[ 2] = ~x32[ 2];
-  x32[ 3] ^= 0xefffffff^r;
-  x32[ 4] = ~x32[ 4];
-  x32[ 5] ^= 0xdfffffff^r;
-  x32[ 6] = ~x32[ 6];
-  x32[ 7] ^= 0xcfffffff^r;
-  x32[ 8] = ~x32[ 8];
-  x32[ 9] ^= 0xbfffffff^r;
-  x32[10] = ~x32[10];
-  x32[11] ^= 0xafffffff^r;
-  x32[12] = ~x32[12];
-  x32[13] ^= 0x9fffffff^r;
-  x32[14] = ~x32[14];
-  x32[15] ^= 0x8fffffff^r;
+  uint32_t c[16] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xefffffff,
+                     0xffffffff, 0xdfffffff, 0xffffffff, 0xcfffffff,
+                     0xffffffff, 0xbfffffff, 0xffffffff, 0xafffffff,
+                     0xffffffff, 0x9fffffff, 0xffffffff, 0x8fffffff};
+  c[1] ^= r;
+  c[3] ^= r;
+  c[5] ^= r;
+  c[7] ^= r;
+  c[9] ^= r;
+  c[11] ^= r;
+  c[13] ^= r;
+  c[15] ^= r;
+
+  for (int i = 0; i < 16 ; i++) {
+      x32[i] ^= c[i];
+  }
   COLUMN(x,y, 0,  2,  6, 10, 14,  1,  5,  9, 13, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
   COLUMN(x,y, 2,  4,  8, 12,  0,  3,  7, 11, 15, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
   COLUMN(x,y, 4,  6, 10, 14,  2,  5,  9, 13,  1, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
