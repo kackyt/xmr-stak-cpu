@@ -514,7 +514,7 @@ const u64b_t SKEIN1024_IV_1024[] =
 #endif
 
 #ifndef SKEIN_LOOP
-#define SKEIN_LOOP 001                          /* default: unroll 256 and 512, but not 1024 */
+#define SKEIN_LOOP 111                          /* default: unroll 256 and 512, but not 1024 */
 #endif
 
 #define BLK_BITS        (WCNT*64)               /* some useful definitions for code here */
@@ -564,6 +564,7 @@ static void Skein_256_Process_Block(Skein_256_Ctxt_t *ctx,const u08b_t *blkPtr,s
 	Skein_assert(blkCnt != 0);                  /* never call with blkCnt == 0! */
 	ts[0] = ctx->h.T[0];
 	ts[1] = ctx->h.T[1];
+    printf("do it 256!!!\n");
 	do  {
 		/* this implementation only supports 2**64 input bytes (no carry out here) */
 		ts[0] += byteCntAdd;                    /* update processed length */
@@ -619,14 +620,16 @@ static void Skein_256_Process_Block(Skein_256_Ctxt_t *ctx,const u08b_t *blkPtr,s
 	Round256(p0,p1,p2,p3,ROT,rNum)                                  \
 	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,4*(r-1)+rNum,Xptr);
 
-#define I256(R)                                                     \
-	X[0]   += ks[r+(R)+0];        /* inject the key schedule value */ \
-	X[1]   += ks[r+(R)+1] + ts[r+(R)+0];                              \
-	X[2]   += ks[r+(R)+2] + ts[r+(R)+1];                              \
-	X[3]   += ks[r+(R)+3] +    r+(R)   ;                              \
+#define I256(R)     {                                                 \
+            x0 = _mm256_load_si256((__m256i*)X); k0 = _mm256_loadu_si256((__m256i*)&ks[r+(R)]); \
+            x0 = _mm256_add_epi64(x0, k0); \
+            _mm256_store_si256((__m256i*)X, x0); \
+	X[1]   += ts[r+(R)+0];                              \
+	X[2]   += ts[r+(R)+1];                              \
+	X[3]   += r+(R)   ;                              \
 	ks[r + (R)+4    ]   = ks[r+(R)-1];     /* rotate key schedule */\
 	ts[r + (R)+2    ]   = ts[r+(R)-1];                              \
-	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,SKEIN_RND_KEY_INJECT,Xptr);
+	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,SKEIN_RND_KEY_INJECT,Xptr); }
 
 	for (r=1;r < 2*RCNT;r+=2*SKEIN_UNROLL_256)  /* loop thru it */
 #endif  
@@ -751,20 +754,36 @@ static void Skein_512_Process_Block(Skein_512_Ctxt_t *ctx,const u08b_t *blkPtr,s
 #else
 	u64b_t  kw[WCNT+4];                         /* key schedule words : chaining vars + tweak */
 #endif
-	u64b_t  X0,X1,X2,X3,X4,X5,X6,X7;            /* local copy of vars, for speed */
-	u64b_t  w [WCNT];                           /* local copy of input block */
+	u64b_t  __attribute__((aligned(16))) X[8];                               /* local copy of vars, for speed */
+	u64b_t  __attribute__((aligned(16))) w [WCNT];                           /* local copy of input block */
 #ifdef SKEIN_DEBUG
 	const u64b_t *Xptr[8];                      /* use for debugging (help compiler put Xn in registers) */
-	Xptr[0] = &X0;  Xptr[1] = &X1;  Xptr[2] = &X2;  Xptr[3] = &X3;
-	Xptr[4] = &X4;  Xptr[5] = &X5;  Xptr[6] = &X6;  Xptr[7] = &X7;
+	Xptr[0] = &X[0];  Xptr[1] = &X[1];  Xptr[2] = &X[2];  Xptr[3] = &X[3];
+	Xptr[4] = &X[4];  Xptr[5] = &X[5];  Xptr[6] = &X[6];  Xptr[7] = &X[7];
 #endif
-
 	Skein_assert(blkCnt != 0);                  /* never call with blkCnt == 0! */
 	ts[0] = ctx->h.T[0];
 	ts[1] = ctx->h.T[1];
 	do  {
 		/* this implementation only supports 2**64 input bytes (no carry out here) */
 		ts[0] += byteCntAdd;                    /* update processed length */
+        __m256i k0 = _mm256_load_si256((__m256i*)&ctx->X[0]);
+        __m256i x0 = _mm256_load_si256((__m256i*)&w[0]);
+
+        x0 = _mm256_add_epi64(x0, k0);
+        _mm256_store_si256((__m256i*)&X[0], x0);
+        k0 = _mm256_load_si256((__m256i*)&ctx->X[2]);
+        x0 = _mm256_load_si256((__m256i*)&w[2]);
+        x0 = _mm256_add_epi64(x0, k0);
+        _mm256_store_si256((__m256i*)&X[2], x0);
+        k0 = _mm256_load_si256((__m256i*)&ctx->X[4]);
+        x0 = _mm256_load_si256((__m256i*)&w[4]);
+        x0 = _mm256_add_epi64(x0, k0);
+        _mm256_store_si256((__m256i*)&X[4], x0);
+        k0 = _mm256_load_si256((__m256i*)&ctx->X[6]);
+        x0 = _mm256_load_si256((__m256i*)&w[6]);
+        x0 = _mm256_add_epi64(x0, k0);
+        _mm256_store_si256((__m256i*)&X[6], x0);
 
 		/* precompute the key schedule for this block */
 		ks[0] = ctx->X[0];
@@ -784,24 +803,18 @@ static void Skein_512_Process_Block(Skein_512_Ctxt_t *ctx,const u08b_t *blkPtr,s
 		DebugSaveTweak(ctx);
 		Skein_Show_Block(BLK_BITS,&ctx->h,ctx->X,blkPtr,w,ks,ts);
 
-		X0   = w[0] + ks[0];                    /* do the first full key injection */
-		X1   = w[1] + ks[1];
-		X2   = w[2] + ks[2];
-		X3   = w[3] + ks[3];
-		X4   = w[4] + ks[4];
-		X5   = w[5] + ks[5] + ts[0];
-		X6   = w[6] + ks[6] + ts[1];
-		X7   = w[7] + ks[7];
+		X[5]   += ts[0];
+		X[6]   += ts[1];
 
 		blkPtr += SKEIN_512_BLOCK_BYTES;
 
 		Skein_Show_R_Ptr(BLK_BITS,&ctx->h,SKEIN_RND_KEY_INITIAL,Xptr);
 		/* run the rounds */
 #define Round512(p0,p1,p2,p3,p4,p5,p6,p7,ROT,rNum)                  \
-	X##p0 += X##p1; X##p1 = RotL_64(X##p1,ROT##_0); X##p1 ^= X##p0; \
-	X##p2 += X##p3; X##p3 = RotL_64(X##p3,ROT##_1); X##p3 ^= X##p2; \
-	X##p4 += X##p5; X##p5 = RotL_64(X##p5,ROT##_2); X##p5 ^= X##p4; \
-	X##p6 += X##p7; X##p7 = RotL_64(X##p7,ROT##_3); X##p7 ^= X##p6; \
+	X[p0] += X[p1]; X[p1] = RotL_64(X[p1],ROT##_0); X[p1] ^= X[p0]; \
+	X[p2] += X[p3]; X[p3] = RotL_64(X[p3],ROT##_1); X[p3] ^= X[p2]; \
+	X[p4] += X[p5]; X[p5] = RotL_64(X[p5],ROT##_2); X[p5] ^= X[p4]; \
+	X[p6] += X[p7]; X[p7] = RotL_64(X[p7],ROT##_3); X[p7] ^= X[p6]; \
 
 #if SKEIN_UNROLL_512 == 0                       
 #define R512(p0,p1,p2,p3,p4,p5,p6,p7,ROT,rNum)      /* unrolled */  \
@@ -809,32 +822,39 @@ static void Skein_512_Process_Block(Skein_512_Ctxt_t *ctx,const u08b_t *blkPtr,s
 	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,rNum,Xptr);
 
 #define I512(R)                                                     \
-	X0   += ks[((R)+1) % 9];   /* inject the key schedule value */  \
-	X1   += ks[((R)+2) % 9];                                        \
-	X2   += ks[((R)+3) % 9];                                        \
-	X3   += ks[((R)+4) % 9];                                        \
-	X4   += ks[((R)+5) % 9];                                        \
-	X5   += ks[((R)+6) % 9] + ts[((R)+1) % 3];                      \
-	X6   += ks[((R)+7) % 9] + ts[((R)+2) % 3];                      \
-	X7   += ks[((R)+8) % 9] +     (R)+1;                            \
+	X[0]   += ks[((R)+1) % 9];   /* inject the key schedule value */  \
+	X[1]   += ks[((R)+2) % 9];                                        \
+	X[2]   += ks[((R)+3) % 9];                                        \
+	X[3]   += ks[((R)+4) % 9];                                        \
+	X[4]   += ks[((R)+5) % 9];                                        \
+	X[5]   += ks[((R)+6) % 9] + ts[((R)+1) % 3];                      \
+	X[6]   += ks[((R)+7) % 9] + ts[((R)+2) % 3];                      \
+	X[7]   += ks[((R)+8) % 9] +     (R)+1;                            \
 	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,SKEIN_RND_KEY_INJECT,Xptr);
 #else                                       /* looping version */
 #define R512(p0,p1,p2,p3,p4,p5,p6,p7,ROT,rNum)                      \
 	Round512(p0,p1,p2,p3,p4,p5,p6,p7,ROT,rNum)                      \
 	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,4*(r-1)+rNum,Xptr);
 
-#define I512(R)                                                     \
-	X0   += ks[r+(R)+0];        /* inject the key schedule value */ \
-	X1   += ks[r+(R)+1];                                            \
-	X2   += ks[r+(R)+2];                                            \
-	X3   += ks[r+(R)+3];                                            \
-	X4   += ks[r+(R)+4];                                            \
-	X5   += ks[r+(R)+5] + ts[r+(R)+0];                              \
-	X6   += ks[r+(R)+6] + ts[r+(R)+1];                              \
-	X7   += ks[r+(R)+7] +    r+(R)   ;                              \
+#define I512(R)   {                                                 \
+            x0 = _mm256_load_si256((__m256i*)&X[0]); k0 = _mm256_loadu_si256((__m256i*)&ks[r+(R)+0]); \
+            x0 = _mm256_add_epi64(x0, k0); \
+            _mm256_store_si256((__m256i*)&X[0], x0); \
+            x0 = _mm256_load_si256((__m256i*)&X[2]); k0 = _mm256_loadu_si256((__m256i*)&ks[r+(R)+2]); \
+            x0 = _mm256_add_epi64(x0, k0); \
+            _mm256_store_si256((__m256i*)&X[2], x0); \
+            x0 = _mm256_load_si256((__m256i*)&X[4]); k0 = _mm256_loadu_si256((__m256i*)&ks[r+(R)+4]); \
+            x0 = _mm256_add_epi64(x0, k0); \
+            _mm256_store_si256((__m256i*)&X[4], x0); \
+            x0 = _mm256_load_si256((__m256i*)&X[6]); k0 = _mm256_loadu_si256((__m256i*)&ks[r+(R)+6]); \
+            x0 = _mm256_add_epi64(x0, k0); \
+            _mm256_store_si256((__m256i*)&X[6], x0); \
+	X[5]   += ts[r+(R)+0];                              \
+	X[6]   += ts[r+(R)+1];                              \
+	X[7]   += r+(R)   ;                              \
 	ks[r +       (R)+8] = ks[r+(R)-1];  /* rotate key schedule */   \
 	ts[r +       (R)+2] = ts[r+(R)-1];                              \
-	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,SKEIN_RND_KEY_INJECT,Xptr);
+	Skein_Show_R_Ptr(BLK_BITS,&ctx->h,SKEIN_RND_KEY_INJECT,Xptr); }
 
 	for (r=1;r < 2*RCNT;r+=2*SKEIN_UNROLL_512)   /* loop thru it */
 #endif                         /* end of looped code definitions */
@@ -901,16 +921,34 @@ static void Skein_512_Process_Block(Skein_512_Ctxt_t *ctx,const u08b_t *blkPtr,s
 #error  "need more unrolling in Skein_512_Process_Block"
   #endif
 		}
+    x0 = _mm256_load_si256((__m256i*)&X[0]);
+    k0 = _mm256_load_si256((__m256i*)&w[0]);
+    x0 = _mm256_xor_si256(x0, k0);
+    _mm256_store_si256((__m256i*)&ctx->X[0], x0);
+    x0 = _mm256_load_si256((__m256i*)&X[2]);
+    k0 = _mm256_load_si256((__m256i*)&w[2]);
+    x0 = _mm256_xor_si256(x0, k0);
+    _mm256_store_si256((__m256i*)&ctx->X[2], x0);
+    x0 = _mm256_load_si256((__m256i*)&X[4]);
+    k0 = _mm256_load_si256((__m256i*)&w[4]);
+    x0 = _mm256_xor_si256(x0, k0);
+    _mm256_store_si256((__m256i*)&ctx->X[4], x0);
+    x0 = _mm256_load_si256((__m256i*)&X[6]);
+    k0 = _mm256_load_si256((__m256i*)&w[6]);
+    x0 = _mm256_xor_si256(x0, k0);
+    _mm256_store_si256((__m256i*)&ctx->X[6], x0);
 
 		/* do the final "feedforward" xor, update context chaining vars */
-		ctx->X[0] = X0 ^ w[0];
-		ctx->X[1] = X1 ^ w[1];
-		ctx->X[2] = X2 ^ w[2];
-		ctx->X[3] = X3 ^ w[3];
-		ctx->X[4] = X4 ^ w[4];
-		ctx->X[5] = X5 ^ w[5];
-		ctx->X[6] = X6 ^ w[6];
-		ctx->X[7] = X7 ^ w[7];
+    /*
+		ctx->X[0] = X[0] ^ w[0];
+		ctx->X[1] = X[1] ^ w[1];
+		ctx->X[2] = X[2] ^ w[2];
+		ctx->X[3] = X[3] ^ w[3];
+		ctx->X[4] = X[4] ^ w[4];
+		ctx->X[5] = X[5] ^ w[5];
+		ctx->X[6] = X[6] ^ w[6];
+		ctx->X[7] = X[7] ^ w[7];
+    */
 		Skein_Show_Round(BLK_BITS,&ctx->h,SKEIN_RND_FEED_FWD,ctx->X);
 
 		ts[1] &= ~SKEIN_T1_FLAG_FIRST;
@@ -970,6 +1008,7 @@ static void Skein1024_Process_Block(Skein1024_Ctxt_t *ctx,const u08b_t *blkPtr,s
 	Xptr[ 8] = &X08;  Xptr[ 9] = &X09;  Xptr[10] = &X10;  Xptr[11] = &X11;
 	Xptr[12] = &X12;  Xptr[13] = &X13;  Xptr[14] = &X14;  Xptr[15] = &X15;
 #endif
+    printf("do it 1024!!!\n");
 
 	Skein_assert(blkCnt != 0);                  /* never call with blkCnt == 0! */
 	ts[0] = ctx->h.T[0];

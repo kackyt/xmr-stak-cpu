@@ -11,7 +11,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
-#include <emmintrin.h>
+#include <immintrin.h>
 #include "c_blake256.h"
 
 #ifdef __GNUC__
@@ -69,10 +69,9 @@ static const uint8_t padding[] = {
 void blake256_compress(state *S, const uint8_t *block) {
 	uint32_t ALIGN v[16];
     uint32_t m[16], i;
-    __m128i a;
-    __m128i b;
-    __m128i v1,v2,v3,v4;
-    const uint32_t ALIGN c[] = { 0x243F6A88, 0x85A308D3, 0x13198A2E, 0x03707344};
+    __m256i a;
+    __m256i v1,v2;
+    const uint32_t ALIGN c[]  = { 0x243F6A88, 0x85A308D3, 0x13198A2E, 0x03707344};
 
 #define ROT(x,n) (((x)<<(32-n))|((x)>>(n)))
 #define G(a,b,c,d,e)                                      \
@@ -87,7 +86,7 @@ void blake256_compress(state *S, const uint8_t *block) {
 
 	for (i = 0; i < 16; ++i) m[i] = U8TO32(block + i * 4);
 	for (i = 0; i < 8;  ++i) v[i] = S->h[i];
-#if 1
+#if 0
     a = _mm_load_si128((__m128i*)&S->s[0]);
     b = _mm_load_si128((__m128i*)c);
     a = _mm_xor_si128(a, b);
@@ -104,18 +103,10 @@ void blake256_compress(state *S, const uint8_t *block) {
 	v[15] = 0xEC4E6C89;
 
 	if (S->nullt == 0) {
-#if 1
-        a = _mm_load_si128((__m128i*)&S->t[0]);
-        b = _mm_load_si128((__m128i*)&v[12]);
-        a = _mm_shuffle_epi32(a, 0x50);
-        b = _mm_xor_si128(a, b);
-        _mm_store_si128((__m128i*)&v[12], b);
-#else
 		v[12] ^= S->t[0];
 		v[13] ^= S->t[0];
 		v[14] ^= S->t[1];
 		v[15] ^= S->t[1];
-#endif
 	}
 
 	for (i = 0; i < 14; ++i) {
@@ -130,25 +121,18 @@ void blake256_compress(state *S, const uint8_t *block) {
 	}
 
 #if 1
-    a = _mm_load_si128((__m128i*)&S->h[0]);
-    b = _mm_load_si128((__m128i*)&S->h[4]);
+    a = _mm256_load_si256((__m256i*)&S->h[0]);
 
-    v1 = _mm_load_si128((__m128i*)&v[0]);
-    v2 = _mm_load_si128((__m128i*)&v[4]);
-    v3 = _mm_load_si128((__m128i*)&v[8]);
-    v4 = _mm_load_si128((__m128i*)&v[12]);
+    v1 = _mm256_load_si256((__m256i*)&v[0]);
+    v2 = _mm256_load_si256((__m256i*)&v[8]);
+    a = _mm256_xor_si256(a, v1);
+    a = _mm256_xor_si256(a, v2);
 
-    a = _mm_xor_si128(a, v1);
-    b = _mm_xor_si128(b, v2);
-    a = _mm_xor_si128(a, v3);
-    b = _mm_xor_si128(b, v4);
+    v1 = _mm256_load_si256((__m256i*)&S->s[0]);
+    v1 = _mm256_permute4x64_epi64(v1, 0x44);
+    a = _mm256_xor_si256(a, v1);
 
-    v1 = _mm_load_si128((__m128i*)&S->s[0]);
-
-    a = _mm_xor_si128(a, v1);
-    b = _mm_xor_si128(b, v1);
-    _mm_store_si128((__m128i*)&S->h[0], a);
-    _mm_store_si128((__m128i*)&S->h[4], b);
+    _mm256_store_si256((__m256i*)&S->h[0], a);
 #else
 	for (i = 0; i < 16; ++i) S->h[i % 8] ^= v[i];
 	for (i = 0; i < 8;  ++i) S->h[i] ^= S->s[i % 4];
