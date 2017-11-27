@@ -148,8 +148,8 @@ endif()
 
 # activate sse2 and aes-ni
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -maes")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse2 -maes")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -mavx2 -maes")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse2 -mavx2 -maes")
 endif()
 
 # activate static libgcc and libstdc++ linking
