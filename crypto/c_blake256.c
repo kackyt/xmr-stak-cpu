@@ -14,6 +14,7 @@
 #include <emmintrin.h>
 #include "c_blake256.h"
 
+#ifdef __GNUC__
 static inline uint32_t U8TO32(const uint8_t *p)
 {
     uint32_t ret = *(const uint32_t*)p;
@@ -26,6 +27,14 @@ static inline void U32TO8(uint8_t *p, uint32_t v)
     __asm__ volatile ("bswap %0" : "+r"(v));
     *(uint32_t *)p = v;
 }
+#else
+#define U8TO32(p) \
+	(((uint32_t)((p)[0]) << 24) | ((uint32_t)((p)[1]) << 16) |    \
+	 ((uint32_t)((p)[2]) <<  8) | ((uint32_t)((p)[3])      ))
+#define U32TO8(p, v) \
+	(p)[0] = (uint8_t)((v) >> 24); (p)[1] = (uint8_t)((v) >> 16); \
+	(p)[2] = (uint8_t)((v) >>  8); (p)[3] = (uint8_t)((v)      );
+#endif
 
 const uint8_t sigma[][16] = {
 	{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15},
@@ -58,12 +67,12 @@ static const uint8_t padding[] = {
 
 
 void blake256_compress(state *S, const uint8_t *block) {
-	uint32_t v[16] __attribute__ ((aligned(16)));
+	uint32_t ALIGN v[16];
     uint32_t m[16], i;
     __m128i a;
     __m128i b;
     __m128i v1,v2,v3,v4;
-    const uint32_t c[] __attribute__ ((aligned(16))) = { 0x243F6A88, 0x85A308D3, 0x13198A2E, 0x03707344};
+    const uint32_t ALIGN c[] = { 0x243F6A88, 0x85A308D3, 0x13198A2E, 0x03707344};
 
 #define ROT(x,n) (((x)<<(32-n))|((x)>>(n)))
 #define G(a,b,c,d,e)                                      \
