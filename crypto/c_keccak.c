@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <memory.h>
+#include <x86intrin.h>
 
 #define HASH_DATA_AREA 136
 #define KECCAK_ROUNDS 24
@@ -34,10 +35,23 @@ void keccakf(uint64_t st[25], int rounds)
 	for (round = 0; round < rounds; ++round) {
 
 		// Theta
-		bc[0] = st[0] ^ st[5] ^ st[10] ^ st[15] ^ st[20];
-		bc[1] = st[1] ^ st[6] ^ st[11] ^ st[16] ^ st[21];
-		bc[2] = st[2] ^ st[7] ^ st[12] ^ st[17] ^ st[22];
-		bc[3] = st[3] ^ st[8] ^ st[13] ^ st[18] ^ st[23];
+        __m128i x = _mm_load_si128((__m128i *)&st[0]);
+        //x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[5]));
+        x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[10]));
+        //x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[15]));
+        x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[20]));
+        _mm_store_si128((__m128i*)&bc[0], x);
+
+        x = _mm_load_si128((__m128i *)&st[2]);
+        //x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[7]));
+        x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[12]));
+        //x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[17]));
+        x = _mm_xor_si128(x, _mm_load_si128((__m128i*)&st[22]));
+        _mm_store_si128((__m128i*)&bc[2], x);
+        bc[0] ^= st[5] ^ st[15];
+		bc[1] ^= st[6] ^ st[16];
+		bc[2] ^= st[7] ^ st[17];
+		bc[3] ^= st[8] ^ st[18];
 		bc[4] = st[4] ^ st[9] ^ st[14] ^ st[19] ^ st[24];
 
 		for (i = 0; i < 5; ++i) {
