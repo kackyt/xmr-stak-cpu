@@ -36,6 +36,17 @@ static inline __m128i _umul128g(uint64_t a, uint64_t b)
   return r;
 }
 
+static inline __m256i _umul256g(uint64_t a, uint64_t b, uint64_t c, uint64_t d)
+{
+  unsigned __int128 __attribute__ ((aligned(32))) m[2];
+  m[0] = (unsigned __int128)a * (unsigned __int128)b;
+  m[1] = (unsigned __int128)c * (unsigned __int128)d;
+
+  __m256i r = _mm256_load_si256((__m256i*)&m[0]);
+
+  return _mm256_permute4x64_epi64(r, 0xb1);
+}
+
 #define _mm256_set_m128i(v0, v1)  _mm256_insertf128_si256(_mm256_castsi128_si256(v1), (v0), 1)
 #else
 #include <intrin.h>
@@ -431,8 +442,7 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
         tmpx = _mm256_setr_m128i(_mm_load_si128((__m128i*)&l0[idx0 & 0x1FFFF0]),
                                     _mm_load_si128((__m128i*)&l1[idx1 & 0x1FFFF0]));
 
-        tmpy = _mm256_setr_m128i(_umul128g(idx0, (uint64_t)tmpx[0]),
-                                    _umul128g(idx1, (uint64_t)tmpx[2]));
+        tmpy = _umul256g(idx0, (uint64_t)tmpx[0], idx1, (uint64_t)tmpx[2]);
 
         ax = _mm256_add_epi64(ax, tmpy);
 
