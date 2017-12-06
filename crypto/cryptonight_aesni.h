@@ -388,10 +388,10 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 	uint8_t* l1 = ctx1->long_state;
 	uint64_t* h1 = (uint64_t*)ctx1->hash_state;
 
-    __m128i ax0 = _mm_set_epi64x(h0[1] ^ h0[5], h0[0] ^ h0[4]);
-	__m128i bx0 = _mm_set_epi64x(h0[3] ^ h0[7], h0[2] ^ h0[6]);
-    __m128i ax1 = _mm_set_epi64x(h1[1] ^ h1[5], h1[0] ^ h1[4]);
-	__m128i bx1 = _mm_set_epi64x(h1[3] ^ h1[7], h1[2] ^ h1[6]);
+    __m256i ax = _mm256_set_epi64x(h1[1] ^ h1[5], h1[0] ^ h1[4],
+                                   h0[1] ^ h0[5], h0[0] ^ h0[4]);
+    __m256i bx = _mm256_set_epi64x(h1[3] ^ h1[7], h1[2] ^ h1[6],
+                                   h0[3] ^ h0[7], h0[2] ^ h0[6]);
 
 	uint64_t idx0 = h0[0] ^ h0[4];
 	uint64_t idx1 = h1[0] ^ h1[4];
@@ -399,64 +399,55 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 	// Optim - 90% time boundary
 	for (size_t i = 0; i < ITERATIONS; i++)
 	{
-		__m128i cx;
-        __m128i tmpx, tmpy;
+      __m128i cx, dx;
+      __m256i tmpx, tmpy;
 		cx = _mm_load_si128((__m128i *)&l0[idx0 & 0x1FFFF0]);
 
 		if(SOFT_AES)
-			cx = soft_aesenc(cx, ax0);
+          cx = soft_aesenc(cx, _mm256_extracti128_si256(ax, 0));
 		else
-			cx = _mm_aesenc_si128(cx, ax0);
-
-		_mm_store_si128((__m128i *)&l0[idx0 & 0x1FFFF0], _mm_xor_si128(bx0, cx));
-		idx0 = _mm_cvtsi128_si64(cx);
-		bx0 = cx;
-
-		if(PREFETCH)
-			_mm_prefetch((const char*)&l0[idx0 & 0x1FFFF0], _MM_HINT_T0);
-
-		cx = _mm_load_si128((__m128i *)&l1[idx1 & 0x1FFFF0]);
+          cx = _mm_aesenc_si128(cx, _mm256_extracti128_si256(ax, 0));
+		dx = _mm_load_si128((__m128i *)&l1[idx1 & 0x1FFFF0]);
 
 		if(SOFT_AES)
-			cx = soft_aesenc(cx, ax1);
+			dx = soft_aesenc(dx, _mm256_extracti128_si256(ax, 1));
 		else
-			cx = _mm_aesenc_si128(cx, ax1);
+			dx = _mm_aesenc_si128(dx, _mm256_extracti128_si256(ax, 1));
 
-		_mm_store_si128((__m128i *)&l1[idx1 & 0x1FFFF0], _mm_xor_si128(bx1, cx));
-		idx1 = _mm_cvtsi128_si64(cx);
-		if(PREFETCH)
+        tmpx = _mm256_setr_m128i(cx, dx);
+        bx = _mm256_xor_si256(bx, tmpx);
+
+		_mm_store_si128((__m128i *)&l0[idx0 & 0x1FFFF0], _mm256_extracti128_si256(bx, 0));
+		_mm_store_si128((__m128i *)&l1[idx1 & 0x1FFFF0], _mm256_extracti128_si256(bx, 1));
+		idx0 = _mm_cvtsi128_si64(cx);
+        idx1 = _mm_cvtsi128_si64(dx);
+        bx = tmpx;
+
+		if(PREFETCH) {
+			_mm_prefetch((const char*)&l0[idx0 & 0x1FFFF0], _MM_HINT_T0);
 			_mm_prefetch((const char*)&l1[idx1 & 0x1FFFF0], _MM_HINT_T0);
-		bx1 = cx;
+        }
 
-        tmpx = _mm_load_si128((__m128i*)&l0[idx0 & 0x1FFFF0]);
-#ifdef __GNUC__
-        tmpy = _umul128g(idx0, (uint64_t)tmpx[0]);
-#else
-		tmpy = _umul128g(idx0, (uint64_t)tmpx.m128i_u64[0]);
-#endif
-        ax0 =  _mm_add_epi64(ax0, tmpy);
-        _mm_store_si128((__m128i*)&l0[idx0 & 0x1FFFF0], ax0);
+        tmpx = _mm256_setr_m128i(_mm_load_si128((__m128i*)&l0[idx0 & 0x1FFFF0]),
+                                    _mm_load_si128((__m128i*)&l1[idx1 & 0x1FFFF0]));
 
-        ax0 = _mm_xor_si128(ax0, tmpx);
-        idx0 = _mm_cvtsi128_si64(ax0);
+        tmpy = _mm256_setr_m128i(_umul128g(idx0, (uint64_t)tmpx[0]),
+                                    _umul128g(idx1, (uint64_t)tmpx[2]));
+
+        ax = _mm256_add_epi64(ax, tmpy);
+
+        _mm_store_si128((__m128i*)&l0[idx0 & 0x1FFFF0], _mm256_extracti128_si256(ax, 0));
+        _mm_store_si128((__m128i*)&l1[idx1 & 0x1FFFF0], _mm256_extracti128_si256(ax, 1));
+
+        ax = _mm256_xor_si256(ax, tmpx);
+        idx0 = ax[0];
+        idx1 = ax[2];
 
 		if(PREFETCH)
 			_mm_prefetch((const char*)&l0[idx0 & 0x1FFFF0], _MM_HINT_T0);
-
-        tmpx = _mm_load_si128((__m128i*)&l1[idx1 & 0x1FFFF0]);
-#ifdef __GNUC__
-		tmpy = _umul128g(idx1, tmpx[0]);
-#else
-		tmpy = _umul128g(idx1, tmpx.m128i_u64[0]);
-#endif
-        ax1 =  _mm_add_epi64(ax1, tmpy);
-        _mm_store_si128((__m128i*)&l1[idx1 & 0x1FFFF0], ax1);
-
-        ax1 = _mm_xor_si128(ax1, tmpx);
-        idx1 = _mm_cvtsi128_si64(ax1);
-
 		if(PREFETCH)
 			_mm_prefetch((const char*)&l1[idx1 & 0x1FFFF0], _MM_HINT_T0);
+
 	}
 
 	// Optim - 90% time boundary
