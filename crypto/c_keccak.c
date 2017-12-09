@@ -4,7 +4,11 @@
 
 #include <stdint.h>
 #include <memory.h>
+#ifdef __GNUC__
 #include <x86intrin.h>
+#else
+#include <pmmintrin.h>
+#endif
 
 #define HASH_DATA_AREA 136
 #define KECCAK_ROUNDS 24

@@ -3,8 +3,17 @@
 
 #include <stdint.h>
 
+#if defined(_MSC_VER)
+#define ALIGN __declspec(align(16))
+#elif defined(__GNUC__)
+#define ALIGN __attribute__ ((aligned(16)))
+#else
+#define ALIGN
+#endif
+
 typedef struct {
-  uint32_t h[8] __attribute__ ((aligned(16))), s[4], t[2];
+	uint32_t ALIGN h[8];
+	uint32_t s[4], t[2];
   int buflen, nullt;
   uint8_t buf[64];
 } state;

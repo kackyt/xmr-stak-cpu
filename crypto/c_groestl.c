@@ -7,7 +7,19 @@
  *          
  *
  */
+#ifdef __GNUC__
 #include <x86intrin.h>
+#else
+#include <pmmintrin.h>
+#endif
+
+#if defined(_MSC_VER)
+#define ALIGN __declspec(align(16))
+#elif defined(__GNUC__)
+#define ALIGN __attribute__ ((aligned(16)))
+#else
+#define ALIGN
+#endif
 
 #include "c_groestl.h"
 #include "groestl_tables.h"
@@ -90,7 +102,7 @@ static void RND512P(uint8_t *x, uint32_t *y, uint32_t r) {
 static void RND512Q(uint8_t *x, uint32_t *y, uint32_t r) {
   uint32_t temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp;
   uint32_t* x32 = (uint32_t*)x;
-  uint32_t __attribute__ ((aligned(16))) c[16] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xefffffff,
+  uint32_t ALIGN c[16] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xefffffff,
                      0xffffffff, 0xdfffffff, 0xffffffff, 0xcfffffff,
                      0xffffffff, 0xbfffffff, 0xffffffff, 0xafffffff,
                      0xffffffff, 0x9fffffff, 0xffffffff, 0x8fffffff};
