@@ -31,9 +31,7 @@ static inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t *hi)
 static inline __m128i _umul128g(uint64_t a, uint64_t b)
 {
   unsigned __int128 m = (unsigned __int128)a * (unsigned __int128)b;
-  m = (m >> 64) | ((m & 0xFFFFFFFFFFFFFFFF) << 64);
-  __m128i r = _mm_load_si128((__m128i*)&m);
-  return r;
+  return _mm_set_epi64x((uint64_t)m, m >> 64);
 }
 
 #define _mm256_set_m128i(v0, v1)  _mm256_insertf128_si256(_mm256_castsi128_si256(v1), (v0), 1)
@@ -429,11 +427,7 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 		bx1 = cx;
 
         tmpx = _mm_load_si128((__m128i*)&l0[idx0 & 0x1FFFF0]);
-#ifdef __GNUC__
-        tmpy = _umul128g(idx0, (uint64_t)tmpx[0]);
-#else
-		tmpy = _umul128g(idx0, (uint64_t)tmpx.m128i_u64[0]);
-#endif
+        tmpy = _umul128g(idx0, _mm_cvtsi128_si64(tmpx));
         ax0 =  _mm_add_epi64(ax0, tmpy);
         _mm_store_si128((__m128i*)&l0[idx0 & 0x1FFFF0], ax0);
 
@@ -444,11 +438,7 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 			_mm_prefetch((const char*)&l0[idx0 & 0x1FFFF0], _MM_HINT_T0);
 
         tmpx = _mm_load_si128((__m128i*)&l1[idx1 & 0x1FFFF0]);
-#ifdef __GNUC__
-		tmpy = _umul128g(idx1, tmpx[0]);
-#else
-		tmpy = _umul128g(idx1, tmpx.m128i_u64[0]);
-#endif
+        tmpy = _umul128g(idx1, _mm_cvtsi128_si64(tmpx));
         ax1 =  _mm_add_epi64(ax1, tmpy);
         _mm_store_si128((__m128i*)&l1[idx1 & 0x1FFFF0], ax1);
 
