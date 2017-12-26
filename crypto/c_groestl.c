@@ -11,6 +11,15 @@
 #include "c_groestl.h"
 #include "groestl_tables.h"
 
+#include <x86intrin.h>
+#if defined(_MSC_VER)
+#define ALIGN __declspec(align(TABLE_ALIGN))
+#elif defined(__GNUC__)
+#define ALIGN __attribute__ ((aligned(16)))
+#else
+#define ALIGN
+#endif
+
 #define P_TYPE 0
 #define Q_TYPE 1
 
@@ -67,7 +76,7 @@ const uint8_t indices_cyclic[15] = {0,1,2,3,4,5,6,7,0,1,2,3,4,5,6};
 static void RND512P(uint8_t *x, uint32_t *y, uint32_t r) {
   uint32_t temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp;
   uint32_t* x32 = (uint32_t*)x;
-  uint32_t c[16] = { 0x00, 0x00, 0x10, 0x00,
+  uint32_t ALIGN c[16] = { 0x00, 0x00, 0x10, 0x00,
                      0x20, 0x00, 0x30, 0x00,
                      0x40, 0x00, 0x50, 0x00,
                      0x60, 0x00, 0x70, 0x00};
@@ -80,8 +89,10 @@ static void RND512P(uint8_t *x, uint32_t *y, uint32_t r) {
   c[12] ^= r;
   c[14] ^= r;
 
-  for (int i = 0; i < 16 ; i++) {
-      x32[i] ^= c[i];
+  for (int i = 0; i < 4 ; i++) {
+      __m128i x128 = _mm_load_si128((__m128i*)&x32[i << 2]);
+      __m128i y128 = _mm_load_si128((__m128i*)&c[i << 2]);
+      _mm_store_si128((__m128i*)&x32[i << 2], _mm_xor_si128(x128, y128));
   }
 
   COLUMN(x,y, 0,  0,  2,  4,  6,  9, 11, 13, 15, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
@@ -98,7 +109,7 @@ static void RND512P(uint8_t *x, uint32_t *y, uint32_t r) {
 static void RND512Q(uint8_t *x, uint32_t *y, uint32_t r) {
   uint32_t temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp;
   uint32_t* x32 = (uint32_t*)x;
-  uint32_t c[16] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xefffffff,
+  uint32_t ALIGN c[16] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xefffffff,
                      0xffffffff, 0xdfffffff, 0xffffffff, 0xcfffffff,
                      0xffffffff, 0xbfffffff, 0xffffffff, 0xafffffff,
                      0xffffffff, 0x9fffffff, 0xffffffff, 0x8fffffff};
@@ -111,8 +122,10 @@ static void RND512Q(uint8_t *x, uint32_t *y, uint32_t r) {
   c[13] ^= r;
   c[15] ^= r;
 
-  for (int i = 0; i < 16 ; i++) {
-      x32[i] ^= c[i];
+  for (int i = 0; i < 4 ; i++) {
+      __m128i x128 = _mm_load_si128((__m128i*)&x32[i << 2]);
+      __m128i y128 = _mm_load_si128((__m128i*)&c[i << 2]);
+      _mm_store_si128((__m128i*)&x32[i << 2], _mm_xor_si128(x128, y128));
   }
   COLUMN(x,y, 0,  2,  6, 10, 14,  1,  5,  9, 13, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
   COLUMN(x,y, 2,  4,  8, 12,  0,  3,  7, 11, 15, temp_v1, temp_v2, temp_upper_value, temp_lower_value, temp);
@@ -127,10 +140,10 @@ static void RND512Q(uint8_t *x, uint32_t *y, uint32_t r) {
 /* compute compression function (short variants) */
 static void F512(uint32_t *h, const uint32_t *m) {
   int i;
-  uint32_t Ptmp[2*COLS512];
-  uint32_t Qtmp[2*COLS512];
-  uint32_t y[2*COLS512];
-  uint32_t z[2*COLS512];
+  uint32_t ALIGN Ptmp[2*COLS512];
+  uint32_t ALIGN Qtmp[2*COLS512];
+  uint32_t ALIGN y[2*COLS512];
+  uint32_t ALIGN z[2*COLS512];
 
   for (i = 0; i < 2*COLS512; i++) {
 	z[i] = m[i];

@@ -386,13 +386,18 @@ void cryptonight_double_hash(const void* input, size_t len, void* output, crypto
 	uint8_t* l1 = ctx1->long_state;
 	uint64_t* h1 = (uint64_t*)ctx1->hash_state;
 
-    __m128i ax0 = _mm_set_epi64x(h0[1] ^ h0[5], h0[0] ^ h0[4]);
-	__m128i bx0 = _mm_set_epi64x(h0[3] ^ h0[7], h0[2] ^ h0[6]);
-    __m128i ax1 = _mm_set_epi64x(h1[1] ^ h1[5], h1[0] ^ h1[4]);
-	__m128i bx1 = _mm_set_epi64x(h1[3] ^ h1[7], h1[2] ^ h1[6]);
+    __m128i ax0 = _mm_load_si128((__m128i*)h0);
+    __m128i bx0 = _mm_load_si128((__m128i*)&h0[2]);
+    __m128i ax1 = _mm_load_si128((__m128i*)h1);
+    __m128i bx1 = _mm_load_si128((__m128i*)&h1[2]);
 
-	uint64_t idx0 = h0[0] ^ h0[4];
-	uint64_t idx1 = h1[0] ^ h1[4];
+    ax0 = _mm_xor_si128(ax0, _mm_load_si128((__m128i*)&h0[4]));
+    bx0 = _mm_xor_si128(bx0, _mm_load_si128((__m128i*)&h0[6]));
+    ax1 = _mm_xor_si128(ax1, _mm_load_si128((__m128i*)&h1[4]));
+    bx1 = _mm_xor_si128(bx1, _mm_load_si128((__m128i*)&h1[6]));
+
+	uint64_t idx0 = _mm_cvtsi128_si64(ax0);
+	uint64_t idx1 = _mm_cvtsi128_si64(ax1);
 
 	// Optim - 90% time boundary
 	for (size_t i = 0; i < ITERATIONS; i++)
