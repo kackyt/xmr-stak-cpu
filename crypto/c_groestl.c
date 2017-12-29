@@ -11,9 +11,13 @@
 #include "c_groestl.h"
 #include "groestl_tables.h"
 
+#ifdef __GNUC__
 #include <x86intrin.h>
+#else
+#include <intrin.h>
+#endif
 #if defined(_MSC_VER)
-#define ALIGN __declspec(align(TABLE_ALIGN))
+#define ALIGN __declspec(align(16))
 #elif defined(__GNUC__)
 #define ALIGN __attribute__ ((aligned(16)))
 #else
