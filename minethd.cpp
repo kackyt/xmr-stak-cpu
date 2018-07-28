@@ -614,7 +614,8 @@ void minethd::penta_work_main()
 			consume_work();
             for (int i = 0; i < 5; i++ ){
                  memcpy(bDoubleWorkBlob + oWork.iWorkSize * i, oWork.bWorkBlob, oWork.iWorkSize);
-                 piNonce[i] = (uint32_t*)(bDoubleWorkBlob + oWork.iWorkSize * i + 39);
+                 if (i > 0)
+                      piNonce[i] = (uint32_t*)(bDoubleWorkBlob + oWork.iWorkSize * i + 39);
             }
 			continue;
 		}
@@ -628,7 +629,7 @@ void minethd::penta_work_main()
 
 		while (iGlobalJobNo.load(std::memory_order_relaxed) == iJobNo)
 		{
-			if ((iCount % 40) == 0) //Store stats every 40 hashes
+			if ((iCount & 0x7) == 0) //Store stats every 8 * N hashes
 			{
 				using namespace std::chrono;
 				uint64_t iStamp = time_point_cast<milliseconds>(high_resolution_clock::now()).time_since_epoch().count();
@@ -636,7 +637,7 @@ void minethd::penta_work_main()
 				iTimestamp.store(iStamp, std::memory_order_relaxed);
 			}
 
-			iCount += 5;
+			iCount++;
 
             for (int i=0; i< 5; i++){
                  *piNonce[i] = ++iNonce;
@@ -646,7 +647,7 @@ void minethd::penta_work_main()
 
             for (int i=0;i<5; i++){
                  if (*piHashVal[i] < oWork.iTarget)
-                      executor::inst()->push_event(ex_event(job_result(oWork.sJobID, iNonce-(4-i), bDoubleHashOut), oWork.iPoolId));
+                      executor::inst()->push_event(ex_event(job_result(oWork.sJobID, iNonce-(5-i), bDoubleHashOut + 32 * i), oWork.iPoolId));
             }
 			std::this_thread::yield();
 		}
