@@ -633,7 +633,7 @@ void minethd::penta_work_main()
 			{
 				using namespace std::chrono;
 				uint64_t iStamp = time_point_cast<milliseconds>(high_resolution_clock::now()).time_since_epoch().count();
-				iHashCount.store(iCount, std::memory_order_relaxed);
+				iHashCount.store(iCount * 5, std::memory_order_relaxed);
 				iTimestamp.store(iStamp, std::memory_order_relaxed);
 			}
 
