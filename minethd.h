@@ -100,6 +100,7 @@ public:
 private:
 	typedef void (*cn_hash_fun)(const void*, size_t, void*, cryptonight_ctx*);
 	typedef void (*cn_hash_fun_dbl)(const void*, size_t, void*, cryptonight_ctx* __restrict, cryptonight_ctx* __restrict);
+    typedef void (*cn_hash_fun_multi)(const void*, size_t, void*, cryptonight_ctx** __restrict);
 
 	minethd(miner_work& pWork, size_t iNo, bool double_work, bool no_prefetch, int64_t affinity);
 
@@ -116,9 +117,11 @@ private:
 
 	static cn_hash_fun func_selector(bool bHaveAes, bool bNoPrefetch);
 	static cn_hash_fun_dbl func_dbl_selector(bool bHaveAes, bool bNoPrefetch);
+	static cn_hash_fun_multi func_penta_selector(bool bHaveAes, bool bNoPrefetch);
 
 	void work_main();
 	void double_work_main();
+	void penta_work_main();
 	void consume_work();
 
 	static std::atomic<uint64_t> iGlobalJobNo;
