@@ -640,7 +640,7 @@ void minethd::penta_work_main()
 			iCount++;
 
             for (int i=0; i< 5; i++){
-                 *piNonce[i] = ++iNonce;
+                 *piNonce[i] = iNonce++;
             }
 
 			hash_fun(bDoubleWorkBlob, oWork.iWorkSize, bDoubleHashOut, ctx);
