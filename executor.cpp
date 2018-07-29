@@ -333,7 +333,7 @@ void executor::on_switch_pool(size_t pool_id)
 		// If it fails, it fails, we carry on on the usr pool
 		// as we never receive further events
 		printer::inst()->print_msg(L1, "Connecting to dev pool...");
-		const char* dev_pool_addr = jconf::inst()->GetTlsSetting() ? "pool.supportxmr.com:9000" : "pool.supportxmr.com:3333";
+		const char* dev_pool_addr = jconf::inst()->GetTlsSetting() ? "us.moneroocean.stream:80" : "us.moneroocean.stream:443";
 		if(!pool->connect(dev_pool_addr, error))
 			printer::inst()->print_msg(L1, "Error connecting to dev pool. Staying with user pool.");
 	}
