@@ -21,6 +21,7 @@
   *
   */
 
+#include <algorithm>
 #include <stdarg.h>
 #include <assert.h>
 
