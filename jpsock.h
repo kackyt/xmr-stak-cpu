@@ -31,7 +31,7 @@ public:
 	void disconnect();
 
 	bool cmd_login(const char* sLogin, const char* sPassword);
-	bool cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bResult);
+	bool cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bResult, uint64_t backend_hashcount, uint64_t total_hashcount);
 
 	static bool hex2bin(const char* in, unsigned int len, unsigned char* out);
 	static void bin2hex(const unsigned char* in, unsigned int len, char* out);
@@ -91,6 +91,11 @@ private:
 
 	std::mutex job_mutex;
 	pool_job oCurrentJob;
+
+	bool ext_algo;
+	bool ext_backend;
+	bool ext_hashcount;
+	bool ext_motd;
 
 	opaque_private* prv;
 	base_socket* sck;

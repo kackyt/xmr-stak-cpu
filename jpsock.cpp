@@ -27,6 +27,7 @@
 #include "jpsock.h"
 #include "executor.h"
 #include "jconf.h"
+#include "console.h"
 
 #include "rapidjson/document.h"
 #include "jext.h"
@@ -94,7 +95,11 @@ struct jpsock::opq_json_val
 	opq_json_val(const Value* val) : val(val) {}
 };
 
-jpsock::jpsock(size_t id, bool tls) : pool_id(id)
+jpsock::jpsock(size_t id, bool tls) : pool_id(id),
+                                      ext_algo(false),
+                                      ext_backend(false),
+                                      ext_hashcount(false),
+                                      ext_motd(false)
 {
 	sock_init();
 
@@ -418,6 +423,7 @@ bool jpsock::process_pool_job(const opq_json_val* params)
 
 bool jpsock::connect(const char* sAddr, std::string& sConnectError)
 {
+	ext_algo = ext_backend = ext_hashcount = ext_motd = false;
 	bHaveSocketError = false;
 	sSocketError.clear();
 	iJobDiff = 0;
@@ -449,8 +455,6 @@ void jpsock::disconnect()
 
 bool jpsock::cmd_ret_wait(const char* sPacket, opq_json_val& poResult)
 {
-	//printf("SEND: %s\n", sPacket);
-
 	/*Set up the call rsp for the call reply*/
 	prv->oCallValue.SetNull();
 	prv->callAllocator.Clear();
@@ -514,6 +518,7 @@ bool jpsock::cmd_login(const char* sLogin, const char* sPassword)
 
 	const Value* id = GetObjectMember(*oResult.val, "id");
 	const Value* job = GetObjectMember(*oResult.val, "job");
+	const Value* ext = GetObjectMember(*oResult.val, "extensions");
 
 	if (id == nullptr || job == nullptr || !id->IsString())
 	{
@@ -532,6 +537,29 @@ bool jpsock::cmd_login(const char* sLogin, const char* sPassword)
 	memset(sMinerId, 0, sizeof(sMinerId));
 	memcpy(sMinerId, id->GetString(), id->GetStringLength());
 
+	if(ext != nullptr && ext->IsArray())
+	{
+		for(size_t i=0; i < ext->Size(); i++)
+		{
+			const Value& jextname = ext->GetArray()[i];
+
+			if(!jextname.IsString())
+				continue;
+
+			std::string tmp(jextname.GetString());
+			std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+
+			if(tmp == "algo")
+				ext_algo = true;
+			else if(tmp == "backend")
+				ext_backend = true;
+			else if(tmp == "hashcount")
+				ext_hashcount = true;
+			else if(tmp == "motd")
+				ext_motd = true;
+		}
+	}
+
 	opq_json_val v(job);
 	if(!process_pool_job(&v))
 	{
@@ -544,11 +572,27 @@ bool jpsock::cmd_login(const char* sLogin, const char* sPassword)
 	return true;
 }
 
-bool jpsock::cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bResult)
+bool jpsock::cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bResult, uint64_t backend_hashcount, uint64_t total_hashcount)
 {
 	char cmd_buffer[1024];
 	char sNonce[9];
 	char sResult[65];
+	/*Extensions*/
+	char sAlgo[64] = {0};
+	char sBackend[64] = {0};
+	char sHashcount[128] = {0};
+
+	if(ext_backend)
+		snprintf(sBackend, sizeof(sBackend), ",\"backend\":\"cpu\"");
+
+	if(ext_hashcount)
+		snprintf(sHashcount, sizeof(sHashcount), ",\"hashcount\":%llu,\"hashcount_total\":%llu", int_port(backend_hashcount), int_port(total_hashcount));
+
+	if(ext_algo)
+	{
+		const char* algo_name = "cryptonight_v8";
+		snprintf(sAlgo, sizeof(sAlgo), ",\"algo\":\"%s\"", algo_name);
+	}
 
 	bin2hex((unsigned char*)&iNonce, 4, sNonce);
 	sNonce[8] = '\0';
@@ -556,8 +600,8 @@ bool jpsock::cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bRes
 	bin2hex(bResult, 32, sResult);
 	sResult[64] = '\0';
 
-	snprintf(cmd_buffer, sizeof(cmd_buffer), "{\"method\":\"submit\",\"params\":{\"id\":\"%s\",\"job_id\":\"%s\",\"nonce\":\"%s\",\"result\":\"%s\"},\"id\":1}\n",
-		sMinerId, sJobId, sNonce, sResult);
+	snprintf(cmd_buffer, sizeof(cmd_buffer), "{\"method\":\"submit\",\"params\":{\"id\":\"%s\",\"job_id\":\"%s\",\"nonce\":\"%s\",\"result\":\"%s\"%s%s%s},\"id\":1}\n",
+		sMinerId, sJobId, sNonce, sResult, sBackend, sHashcount, sAlgo);
 
 	opq_json_val oResult(nullptr);
 	return cmd_ret_wait(cmd_buffer, oResult);

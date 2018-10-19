@@ -115,14 +115,14 @@ private:
 	inline uint32_t calc_nicehash_nonce(uint32_t start, uint32_t resume)
 		{ return start | (resume * iThreadCount + iThreadNo) << 18; }
 
-	static cn_hash_fun func_selector(bool bHaveAes, bool bNoPrefetch);
-	static cn_hash_fun_dbl func_dbl_selector(bool bHaveAes, bool bNoPrefetch);
-	static cn_hash_fun_multi func_penta_selector(bool bHaveAes, bool bNoPrefetch);
+	template<size_t N> static cn_hash_fun_multi func_multi_selector(bool bHaveAes, bool bNoPrefetch);
 
 	void work_main();
 	void double_work_main();
 	void penta_work_main();
 	void consume_work();
+	template<size_t N> void prep_multiway_work(uint8_t *bWorkBlob, uint32_t **piNonce);
+	template<uint32_t N> void multiway_work_main();
 
 	static std::atomic<uint64_t> iGlobalJobNo;
 	static std::atomic<uint64_t> iConsumeCnt;
@@ -132,6 +132,8 @@ private:
 	static miner_work oGlobalWork;
 	miner_work oWork;
 
+	std::promise<void> order_fix;
+	std::mutex thd_aff_set;
 	void pin_thd_affinity();
 
 	std::thread oWorkThd;

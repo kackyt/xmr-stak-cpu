@@ -251,12 +251,17 @@ void executor::on_pool_have_job(size_t pool_id, pool_job& oPoolJob)
 void executor::on_miner_result(size_t pool_id, job_result& oResult)
 {
 	jpsock* pool = pick_pool_by_id(pool_id);
+	uint64_t backend_hashcount, total_hashcount = 0;
+
+	backend_hashcount = pvThreads->at(oResult.iThreadId)->iHashCount.load(std::memory_order_relaxed);
+	for(size_t i = 0; i < pvThreads->size(); i++)
+		total_hashcount += pvThreads->at(i)->iHashCount.load(std::memory_order_relaxed);
 
 	if(pool_id == dev_pool_id)
 	{
 		//Ignore errors silently
 		if(pool->is_running() && pool->is_logged_in())
-			pool->cmd_submit(oResult.sJobID, oResult.iNonce, oResult.bResult);
+             pool->cmd_submit(oResult.sJobID, oResult.iNonce, oResult.bResult, backend_hashcount, total_hashcount);
 
 		return;
 	}
@@ -269,7 +274,7 @@ void executor::on_miner_result(size_t pool_id, job_result& oResult)
 
 	using namespace std::chrono;
 	size_t t_start = time_point_cast<milliseconds>(high_resolution_clock::now()).time_since_epoch().count();
-	bool bResult = pool->cmd_submit(oResult.sJobID, oResult.iNonce, oResult.bResult);
+	bool bResult = pool->cmd_submit(oResult.sJobID, oResult.iNonce, oResult.bResult, backend_hashcount, total_hashcount);
 	size_t t_len = time_point_cast<milliseconds>(high_resolution_clock::now()).time_since_epoch().count() - t_start;
 
 	if(t_len > 0xFFFF)
